@@ -1,0 +1,21 @@
+DROP TABLE IF EXISTS user_2fa_login;
+DROP TABLE IF EXISTS users;
+
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    login_attempts INT DEFAULT 0,
+    2fa TINYINT DEFAULT 0,
+    secret VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user_2fa_login (
+    uuid BINARY(16) DEFAULT (UUID_TO_BIN(UUID())) PRIMARY KEY,
+    user_id SERIAL NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);

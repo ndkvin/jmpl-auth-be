@@ -44,13 +44,31 @@ export default class AuthController {
     }
 
     if (user.login_attempts >= 3) {
-      return res.status(401)
-        .json({
-          success: false,
-          code: 401,
-          status: "Unauthorized",
-          errors: "Please input the captcha to continue."
-        })
+      const { captcha } = req.body
+
+      const result = await fetch(`https://www.google.com/recaptcha/api/siteverify?secret=${process.env.CLIENT_KEY}&response=${captcha}`)
+      const json = await result.json()
+      const { success } = json
+
+      if (!success) {
+        return res.status(401)
+          .json({
+            success: false,
+            code: 401,
+            status: "Unauthorized",
+            errors: "Invalid captcha"
+          })
+      }
+
+      if (!captcha) {
+        return res.status(401)
+          .json({
+            success: false,
+            code: 401,
+            status: "Unauthorized",
+            errors: "Please input the captcha to continue."
+          })
+      }
     }
 
     const isPasswordValid = await this.userRepository.comparePassword(password, user.password)
@@ -66,7 +84,7 @@ export default class AuthController {
           success: false,
           code: 401,
           status: "Unauthorized",
-          errors: "Please input the captcha to continue."
+          errors: "Please input the captcha to continue.",
         } :
         {
           success: false,
@@ -98,7 +116,6 @@ export default class AuthController {
 
       await this.userRepository.createToken2FA(user.id)
       token2fa = await this.userRepository.findToken2FAByUserId(user.id)
-      console.log(token2fa)
 
       return res.status(200)
         .json({

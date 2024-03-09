@@ -6,6 +6,11 @@ import token2FASchema from "../validations/auth/token.2fa.js"
 import Jwt from "../utils/jwt.js";
 import User2FALogin from '../repository/user.2fa.login.repository.js';
 import dotenv from 'dotenv';
+import NotFoundError from '../exceptions/not.found.js';
+import UnprocessableEntity from '../exceptions/unporcessable.entitiy.js';
+import UnauthorizedError from '../exceptions/unauthorized.js';
+import BadRequest from '../exceptions/bad.request.js';
+
 dotenv.config();
 
 export default class AuthController {
@@ -19,60 +24,28 @@ export default class AuthController {
     this.verifyToken = this.verifyToken.bind(this)
   }
 
-  async login(req, res) {
+  async login(req, res, next) {
     try {
       const { error } = await loginSchema.validate(req.body);
 
-      if (error) {
-        return res.status(422)
-          .json({
-            success: false,
-            code: 422,
-            status: "Unprocessable Entity",
-            errors: error.details[0].message
-          })
-      }
+      if (error) throw new UnprocessableEntity(error.details[0].message)
 
       const { username, password } = req.body
 
       const user = await this.userRepository.findByUsername(username)
 
-      if (!user) {
-        return res.status(401)
-          .json({
-            success: false,
-            code: 401,
-            status: "Unauthorized",
-            errors: "Invalid email or password"
-          })
-      }
+      if (!user) throw new UnauthorizedError("Invalid email or password")
 
       if (user.login_attempts >= 3) {
         const { captcha } = req.body
+
+        if (!captcha) throw new UnauthorizedError("Please input the captcha to continue.")
 
         const result = await fetch(`https://www.google.com/recaptcha/api/siteverify?secret=${process.env.CLIENT_KEY}&response=${captcha}`)
         const json = await result.json()
         const { success } = json
 
-        if (!success) {
-          return res.status(401)
-            .json({
-              success: false,
-              code: 401,
-              status: "Unauthorized",
-              errors: "Invalid captcha"
-            })
-        }
-
-        if (!captcha) {
-          return res.status(401)
-            .json({
-              success: false,
-              code: 401,
-              status: "Unauthorized",
-              errors: "Please input the captcha to continue."
-            })
-        }
+        if (!success) throw new UnauthorizedError("Invalid captcha")
       }
 
       const isPasswordValid = await this.userRepository.comparePassword(password, user.password)
@@ -136,62 +109,27 @@ export default class AuthController {
           }
         })
     } catch (error) {
-      console.error(error)
-
-      return res.status(500)
-        .json({
-          success: false,
-          code: 500,
-          status: "Internal Server Error"
-        })
+      next(error)
     }
   }
 
-  async register(req, res) {
+  async register(req, res, next) {
     try {
       const { error } = await registerSchema.validate(req.body);
 
-      if (error) {
-        return res.status(422)
-          .json({
-            success: false,
-            code: 422,
-            status: "Unprocessable Entity",
-            errors: error.details[0].message
-          })
-      }
+      if (error) throw new UnprocessableEntity(error.details[0].message)
 
       const { username, email, password } = req.body
 
       let user = await this.userRepository.findByEmail(email)
-
-      if (user) {
-        return res.status(400)
-          .json({
-            success: false,
-            code: 400,
-            status: "Bad Request",
-            errors: "email already taken"
-          })
-      }
+      if (user) throw new BadRequest("Email already taken")
 
       user = await this.userRepository.findByUsername(username)
-
-      if (user) {
-        return res.status(400)
-          .json({
-            success: false,
-            code: 400,
-            status: "Bad Request",
-            errors: "Username already taken"
-          })
-      }
+      if (user) throw new BadRequest("Username already taken")
 
       await this.userRepository.create(username, email, password)
 
-      user = await this.userRepository.findByEmail(email)
-
-      const { id } = user
+      const { id } = await this.userRepository.findByEmail(email)
 
       return res.status(201)
         .json({
@@ -205,91 +143,48 @@ export default class AuthController {
           }
         })
     } catch (error) {
-      console.error(error)
-
-      return res.status(500)
-        .json({
-          success: false,
-          code: 500,
-          status: "Internal Server Error"
-        })
-
+      next(error)
     }
   }
 
-  async verifyToken(req, res) {
+  async verifyToken(req, res, next) {
     try {
       const { uuid } = req.params
       const { error } = await token2FASchema.validate(req.body);
 
-      if (error) {
-        return res.status(422)
-          .json({
-            success: false,
-            code: 422,
-            status: "Unprocessable Entity",
-            errors: error.details[0].message
-          })
-      }
+      if (error) throw new UnprocessableEntity(error.details[0].message)
 
       const { token } = req.body
+      const { user_id } = await this.user2FALogin.findByUuid(uuid)
 
-      const user = await this.user2FALogin.findByUuid(uuid)
+      if (!user_id) throw new NotFoundError('Token Not Found')
 
-      if (!user) {
-        return res.status(404)
-          .json({
-            success: false,
-            code: 404,
-            status: "Not Found"
-          })
-      }
-
-      const { user_id } = user
-
-      const userData = await this.userRepository.findById(user_id)
-
-      const { secret } = userData
-
+      const { secret } = await this.userRepository.findById(user_id)
       const verified = speakeasy.totp.verify({
         secret: secret,
         encoding: 'base32',
         token: token
       });
 
-      if (verified) {
-        const accessTtoken = await this.jwt.sign({
-          id: user_id
-        })
+      if (!verified) throw new UnauthorizedError("Invalid token provided")
 
-        await this.user2FALogin.destroy(uuid)
+      const accessTtoken = await this.jwt.sign({
+        id: user_id
+      })
 
-        return res.status(200)
-          .json({
-            success: true,
-            code: 200,
-            message: "Login Success",
-            data: {
-              accessTtoken
-            }
-          })
-      }
+      await this.user2FALogin.destroy(uuid)
 
-      return res.status(401).json({
-        success: false,
-        code: 401,
-        status: "Unauthorized",
-        errors: "Invalid Token"
-      });
-    } catch (error) {
-      console.error(error)
-
-      return res.status(500)
+      return res.status(200)
         .json({
-          success: false,
-          code: 500,
-          status: "Internal Server Error"
+          success: true,
+          code: 200,
+          message: "Login Success",
+          data: {
+            accessTtoken
+          }
         })
+    } catch (error) {
+      next(error)
     }
   }
 }

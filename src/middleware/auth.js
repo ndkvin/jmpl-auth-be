@@ -15,7 +15,7 @@ export default class AuthMiddleware {
         success: false,
         code: 401,
         status: "Unauthorized",
-        errors: "Token is required"
+        errors: "Bearer Token is required"
       });
     }
     const token = bearerToken.split(' ')[1];

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import TwoFAController from "../controller/twos.fa.controller.js";
+import TwoFAController from "../controller/two.fa.controller.js";
 import AuthMiddleware from "../middleware/auth.js";
 
 const router = Router();

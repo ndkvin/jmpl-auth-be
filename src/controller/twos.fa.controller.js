@@ -13,76 +13,88 @@ export default class TwoFAController {
   }
 
   async generate(req, res) {
-    const user = await this.userRepository.findById(req.user.id)
-    //
-    if (user['2fa']) {
-      return res.status(400).json({
-        success: 'false',
-        code: 400,
-        message: "You already enable 2fa"
-      })
-    }
+    try {
+      const user = await this.userRepository.findById(req.user.id)
+      //
+      if (user['2fa']) {
+        return res.status(400).json({
+          success: 'false',
+          code: 400,
+          message: "You already enable 2fa"
+        })
+      }
 
-    const secret = speakeasy.generateSecret();
-    console.log(secret)
-    const image = await qrcode.toDataURL(secret.otpauth_url)
+      const secret = speakeasy.generateSecret();
 
-    const success = await this.userRepository.updateSecret(req.user.id, secret.base32);
+      const image = await qrcode.toDataURL(secret.otpauth_url)
 
-    if (!success) {
+      await this.userRepository.updateSecret(req.user.id, secret.base32);
+
+      return res.json({
+        success: true,
+        code: 200,
+        status: "OK",
+        data: {
+          image: image.split(';base64,').pop()
+        },
+      });
+    } catch (error) {
+      console.error(error)
+
       return res.status(500).json({
         success: false,
         code: 500,
         status: "Internal Server Error",
-        errors: "Failed to enable 2FA"
       });
     }
-
-    return res.json({
-      success: true,
-      code: 200,
-      status: "OK",
-      data: {
-        image: image.split(';base64,').pop()
-      },
-    });
   }
 
   async verify(req, res) {
-    const { id } = req.user;
-    const user = await this.userRepository.findById(id);
+    try {
+      const { id } = req.user;
+      const user = await this.userRepository.findById(id);
 
-    const userToken = req.body.token;
+      const userToken = req.body.token;
 
-    const verified = speakeasy.totp.verify({
-      secret: user.secret,
-      encoding: 'base32',
-      token: userToken
-    });
+      const verified = speakeasy.totp.verify({
+        secret: user.secret,
+        encoding: 'base32',
+        token: userToken
+      });
 
-    if (verified) {
-      const success = await this.userRepository.update2FA(req.user.id)
+      if (verified) {
+        const success = await this.userRepository.update2FA(req.user.id)
 
-      if (!success) {
-        return res.status(500).json({
+        if (!success) {
+          return res.status(500).json({
+            success: false,
+            code: 500,
+            status: "Internal Server Error",
+            errors: "Internal Server Error"
+          })
+        }
+        return res.status(200)
+          .json({
+            success: true,
+            code: 200,
+            message: "2FA Successfully Enabled"
+          })
+      } else {
+        return res.status(401).json({
           success: false,
-          code: 500,
-          status: "Internal Server Error",
-          errors: "Internal Server Error"
-        })
+          code: 401,
+          status: "Unauthorized",
+          errors: "Invalid Token"
+        });
       }
-      return res.status(200)
-        .json({
-          success: true,
-          code: 200,
-          message: "2FA Successfully Enabled"
-        })
-    } else {
-      return res.status(401).json({
+    } catch (error) {
+      console.error(error)
+
+      return res.status(500).json({
         success: false,
-        code: 401,
-        status: "Unauthorized",
-        errors: "Invalid Token"
+        code: 500,
+        status: "Internal Server Error",
+        errors: "Internal Server Error"
       });
     }
   }

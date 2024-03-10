@@ -31,6 +31,7 @@ export default class TwoFAController {
         success: true,
         code: 200,
         status: "OK",
+        message: "2FA Secret Generated",
         data: {
           image: image.split(';base64,').pop()
         },
@@ -61,6 +62,7 @@ export default class TwoFAController {
         .json({
           success: true,
           code: 200,
+          status: "OK",
           message: "2FA Successfully Enabled"
         })
     } catch (error) {

@@ -74,7 +74,8 @@ export default class AuthController {
             .json({
               success: true,
               code: 200,
-              status: "token login",
+              status: "OK",
+              message: "Token Create",
               data: {
                 token: token2fa.uuid
               }
@@ -88,8 +89,9 @@ export default class AuthController {
         return res.status(200)
           .json({
             success: true,
-            code: 201,
-            status: "User created",
+            code: 200,
+            status: "OK",
+            message: "Login Success",
             data: {
               token: token2fa.uuid
             }
@@ -98,14 +100,15 @@ export default class AuthController {
 
       const { id } = user
 
-      const accessTtoken = await this.jwt.sign({ id })
+      const accessToken = await this.jwt.sign({ id })
       res.status(200)
         .json({
           success: true,
           code: 200,
           status: "OK",
+          message: "Login Success",
           data: {
-            accessTtoken
+            accessToken
           }
         })
     } catch (error) {
@@ -135,7 +138,8 @@ export default class AuthController {
         .json({
           success: true,
           code: 201,
-          status: "User created",
+          status: "Created",
+          message: "User Created",
           data: {
             id,
             username,
@@ -168,7 +172,7 @@ export default class AuthController {
 
       if (!verified) throw new UnauthorizedError("Invalid token provided")
 
-      const accessTtoken = await this.jwt.sign({
+      const accessToken = await this.jwt.sign({
         id: user_id
       })
 
@@ -178,9 +182,10 @@ export default class AuthController {
         .json({
           success: true,
           code: 200,
+          status: "OK",
           message: "Login Success",
           data: {
-            accessTtoken
+            accessToken
           }
         })
     } catch (error) {

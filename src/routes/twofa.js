@@ -7,7 +7,7 @@ const authMiddleware = new AuthMiddleware()
 
 const twoFAController = new TwoFAController(); 
 
-router.post("/generate", authMiddleware.isLogin, twoFAController.generate);
+router.get("/generate", authMiddleware.isLogin, twoFAController.generate);
 router.post("/verify", authMiddleware.isLogin, twoFAController.verify);
 
 export default router;

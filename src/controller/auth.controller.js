@@ -34,15 +34,18 @@ export default class AuthController {
 
       const user = await this.userRepository.findByUsername(username)
 
-      if (!user) throw new UnauthorizedError("Invalid email or password")
+      if (!user) throw new UnauthorizedError("Username not found")
 
       if (user.login_attempts >= 3) {
         const { captcha } = req.body
 
-        if (!captcha) throw new UnauthorizedError("Please input the captcha to continue.")
+        if (!captcha) throw new UnprocessableEntity("Captha required")
 
-        const result = await fetch(`https://www.google.com/recaptcha/api/siteverify?secret=${process.env.CLIENT_KEY}&response=${captcha}`)
+        const result = await fetch(`https://www.google.com/recaptcha/api/siteverify?secret=${process.env.SECRET_KEY}&response=${captcha}`)
+        
+        console.log(`https://www.google.com/recaptcha/api/siteverify?secret=${process.env.SECRET_KEY}&response=${captcha}`)
         const json = await result.json()
+        
         const { success } = json
 
         if (!success) throw new UnauthorizedError("Invalid captcha")
@@ -59,7 +62,7 @@ export default class AuthController {
           success: false,
           code: 401,
           status: "Unauthorized",
-          errors: "Invalid email or password",
+          message: "Password not valid",
           attempts_remaining: attemptsRemaining
         });
       }
@@ -67,6 +70,7 @@ export default class AuthController {
       await this.userRepository.updateLoginCount(user.id, 0)
 
       if (user['2fa']) {
+
         let token2fa = await this.user2FALogin.findByUserId(user.id)
 
         if (token2fa) {
@@ -75,7 +79,7 @@ export default class AuthController {
               success: true,
               code: 200,
               status: "OK",
-              message: "Token Create",
+              message: "Input token 2fa",
               data: {
                 token: token2fa.uuid
               }
@@ -91,7 +95,7 @@ export default class AuthController {
             success: true,
             code: 200,
             status: "OK",
-            message: "Login Success",
+            message: "Input token 2fa",
             data: {
               token: token2fa.uuid
             }
@@ -159,9 +163,11 @@ export default class AuthController {
       if (error) throw new UnprocessableEntity(error.details[0].message)
 
       const { token } = req.body
-      const { user_id } = await this.user2FALogin.findByUuid(uuid)
 
-      if (!user_id) throw new NotFoundError('Token Not Found')
+      const user= await this.user2FALogin.findByUuid(uuid)
+      
+      if(!user) throw new NotFoundError('Token Not Found')
+      const { user_id } = user
 
       const { secret } = await this.userRepository.findById(user_id)
       const verified = speakeasy.totp.verify({
